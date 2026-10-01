@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { INITIAL_BUGS, INITIAL_AI_ACTIVITY, USERS_BY_ROLE } from "../data/mockData";
 
 const BugContext = createContext(null);
@@ -6,9 +6,166 @@ const BugContext = createContext(null);
 export function BugProvider({ children }) {
   const [bugs, setBugs] = useState(INITIAL_BUGS);
   const [aiActivity, setAiActivity] = useState(INITIAL_AI_ACTIVITY);
-  const [currentRole, setCurrentRole] = useState("developer");
 
-  const currentUser = USERS_BY_ROLE[currentRole] || USERS_BY_ROLE.developer;
+  // Auth state persisted in localStorage
+  const [authSession, setAuthSession] = useState(() => {
+    try {
+      const stored = localStorage.getItem("bugflow_session");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("bugflow_user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [currentRole, setCurrentRole] = useState(() => {
+    try {
+      const stored = localStorage.getItem("bugflow_user");
+      if (stored) {
+        const u = JSON.parse(stored);
+        if (u?.role) return u.role;
+      }
+    } catch {
+      // Fallback
+    }
+    return "developer";
+  });
+
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Validate existing token on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    const verifySession = async () => {
+      if (!authSession?.access_token) {
+        if (isMounted) setAuthLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/auth/me", {
+          headers: {
+            Authorization: `Bearer ${authSession.access_token}`,
+          },
+        });
+        const data = await res.json();
+        if (!isMounted) return;
+
+        if (data.success && data.user) {
+          setAuthUser(data.user);
+          if (data.user.role) {
+            setCurrentRole(data.user.role);
+          }
+        } else {
+          // Token expired or invalid
+          setAuthSession(null);
+          setAuthUser(null);
+          localStorage.removeItem("bugflow_session");
+          localStorage.removeItem("bugflow_user");
+        }
+      } catch {
+        // Network failure; keep cached credentials
+      } finally {
+        if (isMounted) setAuthLoading(false);
+      }
+    };
+
+    verifySession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authSession?.access_token]);
+
+  const login = async (email, password) => {
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        return { success: false, error: data.error || "Authentication failed" };
+      }
+      setAuthSession(data.session);
+      setAuthUser(data.user);
+      if (data.user?.role) {
+        setCurrentRole(data.user.role);
+      }
+      localStorage.setItem("bugflow_session", JSON.stringify(data.session));
+      localStorage.setItem("bugflow_user", JSON.stringify(data.user));
+      return { success: true, user: data.user };
+    } catch (err) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  };
+
+  const register = async (email, password, name, role) => {
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name, role }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        return { success: false, error: data.error || "Registration failed" };
+      }
+      if (data.session) {
+        setAuthSession(data.session);
+        setAuthUser(data.user);
+        if (data.user?.role) {
+          setCurrentRole(data.user.role);
+        }
+        localStorage.setItem("bugflow_session", JSON.stringify(data.session));
+        localStorage.setItem("bugflow_user", JSON.stringify(data.user));
+      }
+      return { success: true, user: data.user };
+    } catch (err) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Ignore network errors on logout
+    }
+    setAuthSession(null);
+    setAuthUser(null);
+    localStorage.removeItem("bugflow_session");
+    localStorage.removeItem("bugflow_user");
+  };
+
+  const roleConfig = USERS_BY_ROLE[currentRole] || USERS_BY_ROLE.developer;
+  const currentUser = authUser
+    ? {
+        role: authUser.role || currentRole,
+        name: authUser.name || roleConfig.name,
+        roleLabel: roleConfig.roleLabel || `${(authUser.role || "developer").toUpperCase()} Engineer`,
+        email: authUser.email,
+        team: roleConfig.team || "Core Engineering",
+        avatar: authUser.name
+          ? authUser.name
+              .split(" ")
+              .map((p) => p[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase()
+          : roleConfig.avatar,
+      }
+    : roleConfig;
 
   const updateBugStatus = (bugId, newStatus, noteText = null) => {
     setBugs((prev) =>
@@ -312,6 +469,13 @@ export function BugProvider({ children }) {
         currentRole,
         setCurrentRole,
         currentUser,
+        authSession,
+        authUser,
+        isAuthenticated: Boolean(authUser && authSession?.access_token),
+        authLoading,
+        login,
+        register,
+        logout,
         updateBugStatus,
         reassignBug,
         assignBug,

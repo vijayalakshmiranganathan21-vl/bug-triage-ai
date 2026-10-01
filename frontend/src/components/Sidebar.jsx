@@ -50,7 +50,7 @@ const ROLES_CONFIG = {
 const cx = (...parts) => parts.filter(Boolean).join(" ");
 
 function SidebarBody({ onNavigate }) {
-  const { currentRole, currentUser, setCurrentRole } = useBugs();
+  const { currentRole, currentUser, setCurrentRole, logout } = useBugs();
   const navigate = useNavigate();
   const config = ROLES_CONFIG[currentRole] || ROLES_CONFIG.developer;
 
@@ -63,7 +63,8 @@ function SidebarBody({ onNavigate }) {
     onNavigate?.();
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout?.();
     navigate("/login");
     onNavigate?.();
   };

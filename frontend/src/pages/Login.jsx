@@ -10,6 +10,7 @@ import {
   Mail,
   ShieldCheck,
   Sparkles,
+  User,
   Users,
 } from "lucide-react";
 import { useBugs } from "../context/BugContext";
@@ -48,23 +49,33 @@ const ROLES = [
 ];
 
 export default function Login() {
-  const { setCurrentRole } = useBugs();
+  const { login, register } = useBugs();
   const navigate = useNavigate();
 
+  const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [selectedRole, setSelectedRole] = useState("developer");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("dev@bugflow.ai");
-  const [password, setPassword] = useState("••••••••••••");
+  const [password, setPassword] = useState("password123");
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSelectRole = (role) => {
     setSelectedRole(role.id);
-    setEmail(role.email);
+    if (mode === "signin") {
+      setEmail(role.email);
+      setPassword("password123");
+    }
     setError("");
+    setSuccessMsg("");
   };
 
-  const handleSignIn = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setSuccessMsg("");
+
     if (!email.trim()) {
       setError("Please enter your email address.");
       return;
@@ -74,23 +85,55 @@ export default function Login() {
       return;
     }
 
-    setError("");
-    setLoading(true);
-    setCurrentRole(selectedRole);
+    if (mode === "signup" && password.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      return;
+    }
 
-    setTimeout(() => {
-      const activeRoleConfig = ROLES.find((r) => r.id === selectedRole);
-      if (activeRoleConfig) {
-        navigate(activeRoleConfig.route);
+    setLoading(true);
+
+    try {
+      if (mode === "signin") {
+        const result = await login(email.trim(), password);
+        if (!result.success) {
+          setError(result.error || "Authentication failed. Please verify credentials.");
+          setLoading(false);
+          return;
+        }
+
+        const role = result.user?.role || selectedRole;
+        const targetRoute = role === "qa" ? "/qa" : role === "manager" ? "/manager" : "/developer";
+        navigate(targetRoute);
       } else {
-        navigate("/developer");
+        const result = await register(
+          email.trim(),
+          password,
+          name.trim() || undefined,
+          selectedRole
+        );
+        if (!result.success) {
+          setError(result.error || "Registration failed. Please try again.");
+          setLoading(false);
+          return;
+        }
+
+        setSuccessMsg("Account created and authenticated successfully!");
+        const role = result.user?.role || selectedRole;
+        const targetRoute = role === "qa" ? "/qa" : role === "manager" ? "/manager" : "/developer";
+        setTimeout(() => {
+          navigate(targetRoute);
+        }, 300);
       }
-    }, 200);
+    } catch (err) {
+      setError(err.message || "An unexpected error occurred during login.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* Background Subtle Gradient Accents */}
+      {/* Brand Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563EB] text-white shadow-md shadow-blue-500/20 mb-3">
           <Bug size={24} />
@@ -101,11 +144,56 @@ export default function Login() {
         <p className="mt-1 text-sm text-[#667085]">
           Autonomous Bug Triage & Engineering Operations Platform
         </p>
+
+        {/* Supabase Auth Active Badge */}
+        <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 shadow-2xs">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span>Supabase Authenticated</span>
+        </div>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-xl">
+      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-xl">
         <div className="bg-white py-8 px-6 shadow-sm border border-[#E5E7EB] sm:rounded-2xl sm:px-10">
-          <form onSubmit={handleSignIn} className="space-y-6">
+          {/* Sign In vs Register Tabs */}
+          <div className="flex border-b border-[#E5E7EB] mb-6">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("signin");
+                setError("");
+                setSuccessMsg("");
+              }}
+              className={`flex-1 pb-3 text-sm font-semibold text-center border-b-2 transition-colors ${
+                mode === "signin"
+                  ? "border-[#2563EB] text-[#2563EB]"
+                  : "border-transparent text-[#667085] hover:text-[#172033]"
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("signup");
+                setError("");
+                setSuccessMsg("");
+                setEmail("");
+                setPassword("");
+              }}
+              className={`flex-1 pb-3 text-sm font-semibold text-center border-b-2 transition-colors ${
+                mode === "signup"
+                  ? "border-[#2563EB] text-[#2563EB]"
+                  : "border-transparent text-[#667085] hover:text-[#172033]"
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs font-semibold text-red-700 flex items-center gap-2">
                 <span>⚠️</span>
@@ -113,9 +201,16 @@ export default function Login() {
               </div>
             )}
 
+            {successMsg && (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-700 flex items-center gap-2">
+                <CheckCircle2 size={16} />
+                <span>{successMsg}</span>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-2.5">
-                Select Your Role
+                {mode === "signin" ? "Quick Select Demo Account" : "Assign Your Primary Role"}
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -166,8 +261,29 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Email & Credentials preview */}
+            {/* Email & Credentials fields */}
             <div className="space-y-4">
+              {mode === "signup" && (
+                <div>
+                  <label className="block text-xs font-medium text-[#172033] mb-1.5">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User
+                      size={16}
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#667085]"
+                    />
+                    <input
+                      type="text"
+                      placeholder="e.g. Alex Rivera"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="h-10 w-full rounded-lg border border-[#E5E7EB] bg-[#F7F8FA] pl-9 pr-3 text-sm text-[#172033] focus:border-[#2563EB] focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium text-[#172033] mb-1.5">
                   Email Address
@@ -192,9 +308,11 @@ export default function Login() {
                   <label className="block text-xs font-medium text-[#172033]">
                     Password
                   </label>
-                  <span className="text-[11px] text-[#2563EB] hover:underline cursor-pointer">
-                    Mock credentials enabled
-                  </span>
+                  {mode === "signin" && (
+                    <span className="text-[11px] text-[#2563EB] font-medium">
+                      Demo password: password123
+                    </span>
+                  )}
                 </div>
                 <div className="relative">
                   <Lock
@@ -205,6 +323,7 @@ export default function Login() {
                     type="password"
                     required
                     value={password}
+                    placeholder={mode === "signup" ? "At least 6 characters" : ""}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-10 w-full rounded-lg border border-[#E5E7EB] bg-[#F7F8FA] pl-9 pr-3 text-sm text-[#172033] focus:border-[#2563EB] focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
@@ -212,14 +331,18 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Sign in button */}
+            {/* Submit button */}
             <button
               type="submit"
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 h-11 rounded-xl bg-[#2563EB] text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors disabled:opacity-50"
             >
               <span>
-                {loading ? "Authenticating..." : `Sign In as ${ROLES.find(r => r.id === selectedRole)?.title}`}
+                {loading
+                  ? "Authenticating with Supabase..."
+                  : mode === "signin"
+                  ? `Sign In as ${ROLES.find((r) => r.id === selectedRole)?.title}`
+                  : `Create ${ROLES.find((r) => r.id === selectedRole)?.title} Account`}
               </span>
               <ArrowRight size={16} />
             </button>
@@ -228,21 +351,42 @@ export default function Login() {
           {/* Quick role dispatch indicators */}
           <div className="mt-6 pt-6 border-t border-[#E5E7EB]">
             <p className="text-center text-xs font-medium text-[#667085] mb-3">
-              One-click route redirection:
+              One-click authenticated role routes:
             </p>
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="p-2 rounded-lg bg-[#F7F8FA] border border-[#E5E7EB]">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("signin");
+                  handleSelectRole(ROLES[1]);
+                }}
+                className="p-2 rounded-lg bg-[#F7F8FA] border border-[#E5E7EB] hover:border-blue-400 transition-colors"
+              >
                 <p className="font-semibold text-[#172033]">QA</p>
-                <p className="text-[11px] text-[#2563EB]">/qa</p>
-              </div>
-              <div className="p-2 rounded-lg bg-[#F7F8FA] border border-[#E5E7EB]">
+                <p className="text-[11px] text-[#2563EB]">qa@bugflow.ai</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("signin");
+                  handleSelectRole(ROLES[0]);
+                }}
+                className="p-2 rounded-lg bg-[#F7F8FA] border border-[#E5E7EB] hover:border-blue-400 transition-colors"
+              >
                 <p className="font-semibold text-[#172033]">Developer</p>
-                <p className="text-[11px] text-[#2563EB]">/developer</p>
-              </div>
-              <div className="p-2 rounded-lg bg-[#F7F8FA] border border-[#E5E7EB]">
+                <p className="text-[11px] text-[#2563EB]">dev@bugflow.ai</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("signin");
+                  handleSelectRole(ROLES[2]);
+                }}
+                className="p-2 rounded-lg bg-[#F7F8FA] border border-[#E5E7EB] hover:border-blue-400 transition-colors"
+              >
                 <p className="font-semibold text-[#172033]">Manager</p>
-                <p className="text-[11px] text-[#2563EB]">/manager</p>
-              </div>
+                <p className="text-[11px] text-[#2563EB]">manager@bugflow.ai</p>
+              </button>
             </div>
           </div>
         </div>

@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Bell, Check, Menu, Search, Sparkles, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Bell, Check, LogOut, Menu, Search, Sparkles, X } from "lucide-react";
 import { useBugs } from "../context/BugContext";
 
 export default function Header({ title, subtitle, onSearch, onMenu }) {
-  const { currentUser, aiActivity } = useBugs();
+  const { currentUser, aiActivity, logout } = useBugs();
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -139,6 +141,18 @@ export default function Header({ title, subtitle, onSearch, onMenu }) {
                 {currentUser.roleLabel}
               </span>
             </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await logout();
+                navigate("/login");
+              }}
+              title="Sign Out"
+              aria-label="Sign Out"
+              className="ml-1 flex h-8 w-8 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white text-[#667085] hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+            >
+              <LogOut size={15} />
+            </button>
           </div>
         </div>
       </div>
