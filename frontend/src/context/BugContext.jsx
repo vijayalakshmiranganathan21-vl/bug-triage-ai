@@ -1,7 +1,13 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { INITIAL_BUGS, INITIAL_AI_ACTIVITY, USERS_BY_ROLE } from "../data/mockData";
+import {
+  INITIAL_BUGS,
+  INITIAL_AI_ACTIVITY,
+  USERS_BY_ROLE,
+} from "../data/mockData";
 
 const BugContext = createContext(null);
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 export function BugProvider({ children }) {
   const [bugs, setBugs] = useState(INITIAL_BUGS);
@@ -29,6 +35,7 @@ export function BugProvider({ children }) {
   const [currentRole, setCurrentRole] = useState(() => {
     try {
       const stored = localStorage.getItem("bugflow_user");
+
       if (stored) {
         const u = JSON.parse(stored);
         if (u?.role) return u.role;
@@ -36,6 +43,7 @@ export function BugProvider({ children }) {
     } catch {
       // Fallback
     }
+
     return "developer";
   });
 
@@ -52,16 +60,19 @@ export function BugProvider({ children }) {
       }
 
       try {
-        const res = await fetch("/api/auth/me", {
+        const res = await fetch(`${API_URL}/api/auth/me`, {
           headers: {
             Authorization: `Bearer ${authSession.access_token}`,
           },
         });
+
         const data = await res.json();
+
         if (!isMounted) return;
 
         if (data.success && data.user) {
           setAuthUser(data.user);
+
           if (data.user.role) {
             setCurrentRole(data.user.role);
           }
@@ -88,74 +99,136 @@ export function BugProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ email, password }),
       });
+
       const data = await res.json();
+
       if (!data.success) {
-        return { success: false, error: data.error || "Authentication failed" };
+        return {
+          success: false,
+          error: data.error || "Authentication failed",
+        };
       }
+
       setAuthSession(data.session);
       setAuthUser(data.user);
+
       if (data.user?.role) {
         setCurrentRole(data.user.role);
       }
-      localStorage.setItem("bugflow_session", JSON.stringify(data.session));
-      localStorage.setItem("bugflow_user", JSON.stringify(data.user));
-      return { success: true, user: data.user };
+
+      localStorage.setItem(
+        "bugflow_session",
+        JSON.stringify(data.session)
+      );
+
+      localStorage.setItem(
+        "bugflow_user",
+        JSON.stringify(data.user)
+      );
+
+      return {
+        success: true,
+        user: data.user,
+      };
     } catch (err) {
-      return { success: false, error: err.message || "Network error" };
+      return {
+        success: false,
+        error: err.message || "Network error",
+      };
     }
   };
 
   const register = async (email, password, name, role) => {
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name, role }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          name,
+          role,
+        }),
       });
+
       const data = await res.json();
+
       if (!data.success) {
-        return { success: false, error: data.error || "Registration failed" };
+        return {
+          success: false,
+          error: data.error || "Registration failed",
+        };
       }
+
       if (data.session) {
         setAuthSession(data.session);
         setAuthUser(data.user);
+
         if (data.user?.role) {
           setCurrentRole(data.user.role);
         }
-        localStorage.setItem("bugflow_session", JSON.stringify(data.session));
-        localStorage.setItem("bugflow_user", JSON.stringify(data.user));
+
+        localStorage.setItem(
+          "bugflow_session",
+          JSON.stringify(data.session)
+        );
+
+        localStorage.setItem(
+          "bugflow_user",
+          JSON.stringify(data.user)
+        );
       }
-      return { success: true, user: data.user };
+
+      return {
+        success: true,
+        user: data.user,
+      };
     } catch (err) {
-      return { success: false, error: err.message || "Network error" };
+      return {
+        success: false,
+        error: err.message || "Network error",
+      };
     }
   };
 
   const logout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: "POST",
+      });
     } catch {
       // Ignore network errors on logout
     }
+
     setAuthSession(null);
     setAuthUser(null);
+
     localStorage.removeItem("bugflow_session");
     localStorage.removeItem("bugflow_user");
   };
 
-  const roleConfig = USERS_BY_ROLE[currentRole] || USERS_BY_ROLE.developer;
+  const roleConfig =
+    USERS_BY_ROLE[currentRole] || USERS_BY_ROLE.developer;
+
   const currentUser = authUser
     ? {
         role: authUser.role || currentRole,
         name: authUser.name || roleConfig.name,
-        roleLabel: roleConfig.roleLabel || `${(authUser.role || "developer").toUpperCase()} Engineer`,
+        roleLabel:
+          roleConfig.roleLabel ||
+          `${(authUser.role || "developer").toUpperCase()} Engineer`,
         email: authUser.email,
         team: roleConfig.team || "Core Engineering",
+
         avatar: authUser.name
           ? authUser.name
               .split(" ")
@@ -171,14 +244,23 @@ export function BugProvider({ children }) {
     setBugs((prev) =>
       prev.map((bug) => {
         if (bug.id !== bugId) return bug;
+
         const newActivity = {
           user: currentUser.name,
           role: currentUser.roleLabel,
           time: "Just now",
-          text: noteText || `Status transitioned to "${newStatus}"`,
+          text:
+            noteText ||
+            `Status transitioned to "${newStatus}"`,
         };
-        const currentActivities = bug.activities || bug.notes || [];
-        const updatedActivities = [newActivity, ...currentActivities];
+
+        const currentActivities =
+          bug.activities || bug.notes || [];
+
+        const updatedActivities = [
+          newActivity,
+          ...currentActivities,
+        ];
 
         return {
           ...bug,
@@ -194,32 +276,56 @@ export function BugProvider({ children }) {
         id: `act-${Date.now()}`,
         bugId,
         text: `status changed to "${newStatus}" by ${currentUser.name}`,
-        icon: newStatus === "Resolved" ? "CheckCircle2" : "RotateCcw",
+        icon:
+          newStatus === "Resolved"
+            ? "CheckCircle2"
+            : "RotateCcw",
         time: "Just now",
-        tone: newStatus === "Resolved" ? "emerald" : "blue",
+        tone:
+          newStatus === "Resolved"
+            ? "emerald"
+            : "blue",
       },
       ...prev,
     ]);
   };
 
-  const reassignBug = (bugId, newTeam, newDeveloper, reason = null) => {
+  const reassignBug = (
+    bugId,
+    newTeam,
+    newDeveloper,
+    reason = null
+  ) => {
     setBugs((prev) =>
       prev.map((bug) => {
         if (bug.id !== bugId) return bug;
+
         const newActivity = {
           user: currentUser.name,
           role: currentUser.roleLabel,
           time: "Just now",
-          text: `Reassigned to ${newDeveloper} (${newTeam})${reason ? `: ${reason}` : ""}`,
+          text: `Reassigned to ${newDeveloper} (${newTeam})${
+            reason ? `: ${reason}` : ""
+          }`,
         };
-        const currentActivities = bug.activities || bug.notes || [];
-        const updatedActivities = [newActivity, ...currentActivities];
+
+        const currentActivities =
+          bug.activities || bug.notes || [];
+
+        const updatedActivities = [
+          newActivity,
+          ...currentActivities,
+        ];
 
         return {
           ...bug,
           team: newTeam,
           developer: newDeveloper,
-          status: bug.status === "New" || bug.status === "AI Processing" ? "Assigned" : bug.status,
+          status:
+            bug.status === "New" ||
+            bug.status === "AI Processing"
+              ? "Assigned"
+              : bug.status,
           activities: updatedActivities,
           notes: updatedActivities,
         };
@@ -243,14 +349,21 @@ export function BugProvider({ children }) {
     setBugs((prev) =>
       prev.map((bug) => {
         if (bug.id !== bugId) return bug;
+
         const newActivity = {
           user: currentUser.name,
           role: currentUser.roleLabel,
           time: "Just now",
           text: `Assigned to ${developer} (${team})`,
         };
-        const currentActivities = bug.activities || bug.notes || [];
-        const updatedActivities = [newActivity, ...currentActivities];
+
+        const currentActivities =
+          bug.activities || bug.notes || [];
+
+        const updatedActivities = [
+          newActivity,
+          ...currentActivities,
+        ];
 
         return {
           ...bug,
@@ -280,18 +393,28 @@ export function BugProvider({ children }) {
     setBugs((prev) =>
       prev.map((bug) => {
         if (bug.id !== bugId) return bug;
+
         const newActivity = {
           user: currentUser.name,
           role: currentUser.roleLabel,
           time: "Just now",
           text: `Priority updated to ${newPriority}`,
         };
-        const currentActivities = bug.activities || bug.notes || [];
+
+        const currentActivities =
+          bug.activities || bug.notes || [];
+
         return {
           ...bug,
           priority: newPriority,
-          activities: [newActivity, ...currentActivities],
-          notes: [newActivity, ...currentActivities],
+          activities: [
+            newActivity,
+            ...currentActivities,
+          ],
+          notes: [
+            newActivity,
+            ...currentActivities,
+          ],
         };
       })
     );
@@ -301,18 +424,28 @@ export function BugProvider({ children }) {
     setBugs((prev) =>
       prev.map((bug) => {
         if (bug.id !== bugId) return bug;
+
         const newActivity = {
           user: currentUser.name,
           role: currentUser.roleLabel,
           time: "Just now",
           text: `Severity updated to ${newSeverity}`,
         };
-        const currentActivities = bug.activities || bug.notes || [];
+
+        const currentActivities =
+          bug.activities || bug.notes || [];
+
         return {
           ...bug,
           severity: newSeverity,
-          activities: [newActivity, ...currentActivities],
-          notes: [newActivity, ...currentActivities],
+          activities: [
+            newActivity,
+            ...currentActivities,
+          ],
+          notes: [
+            newActivity,
+            ...currentActivities,
+          ],
         };
       })
     );
@@ -320,6 +453,7 @@ export function BugProvider({ children }) {
 
   const addBugComment = (bugId, text) => {
     if (!text?.trim()) return;
+
     const newActivity = {
       user: currentUser.name,
       role: currentUser.roleLabel,
@@ -330,8 +464,15 @@ export function BugProvider({ children }) {
     setBugs((prev) =>
       prev.map((bug) => {
         if (bug.id !== bugId) return bug;
-        const currentActivities = bug.activities || bug.notes || [];
-        const updatedActivities = [newActivity, ...currentActivities];
+
+        const currentActivities =
+          bug.activities || bug.notes || [];
+
+        const updatedActivities = [
+          newActivity,
+          ...currentActivities,
+        ];
+
         return {
           ...bug,
           activities: updatedActivities,
@@ -341,37 +482,68 @@ export function BugProvider({ children }) {
     );
   };
 
-  const updateBugRepro = (bugId, reproStatus, steps = null) => {
+  const updateBugRepro = (
+    bugId,
+    reproStatus,
+    steps = null
+  ) => {
     setBugs((prev) =>
       prev.map((bug) => {
         if (bug.id !== bugId) return bug;
+
         return {
           ...bug,
           reproductionStatus: reproStatus,
           reproStatus: reproStatus,
-          ...(steps ? { reproductionSteps: steps } : {}),
+          ...(steps
+            ? { reproductionSteps: steps }
+            : {}),
         };
       })
     );
   };
 
-  const completeAiTriage = (bugId, triageResult = {}) => {
+  const completeAiTriage = (
+    bugId,
+    triageResult = {}
+  ) => {
     setBugs((prev) =>
       prev.map((bug) => {
         if (bug.id !== bugId) return bug;
+
         return {
           ...bug,
           aiStatus: "Analyzed",
-          status: bug.status === "AI Processing" ? "New" : bug.status,
-          title: triageResult.standardizedTitle || bug.title,
-          aiSummary: triageResult.aiSummary || bug.aiSummary,
-          severity: triageResult.severity || bug.severity,
-          priority: triageResult.priority || bug.priority,
-          aiConfidence: triageResult.confidence || 94,
-          aiReason: triageResult.reason || bug.aiReason,
-          team: triageResult.team || bug.team,
-          developer: triageResult.developer || bug.developer,
-          duplicates: triageResult.duplicates || bug.duplicates,
+          status:
+            bug.status === "AI Processing"
+              ? "New"
+              : bug.status,
+          title:
+            triageResult.standardizedTitle ||
+            bug.title,
+          aiSummary:
+            triageResult.aiSummary ||
+            bug.aiSummary,
+          severity:
+            triageResult.severity ||
+            bug.severity,
+          priority:
+            triageResult.priority ||
+            bug.priority,
+          aiConfidence:
+            triageResult.confidence || 94,
+          aiReason:
+            triageResult.reason ||
+            bug.aiReason,
+          team:
+            triageResult.team ||
+            bug.team,
+          developer:
+            triageResult.developer ||
+            bug.developer,
+          duplicates:
+            triageResult.duplicates ||
+            bug.duplicates,
         };
       })
     );
@@ -380,7 +552,9 @@ export function BugProvider({ children }) {
       {
         id: `act-${Date.now()}`,
         bugId,
-        text: `AI triage completed · classified as ${triageResult.severity || "Analyzed"}`,
+        text: `AI triage completed · classified as ${
+          triageResult.severity || "Analyzed"
+        }`,
         icon: "Sparkles",
         time: "Just now",
         tone: "violet",
@@ -390,28 +564,49 @@ export function BugProvider({ children }) {
   };
 
   const createBug = (newBugData) => {
-    const newId = `BUG-${140 + Math.floor(Math.random() * 800)}`;
+    const newId = `BUG-${
+      140 + Math.floor(Math.random() * 800)
+    }`;
+
     const fullBug = {
       id: newId,
       title: newBugData.title || "Untitled Issue",
-      description: newBugData.description || newBugData.title,
-      source: newBugData.source || "Manual Report",
+      description:
+        newBugData.description ||
+        newBugData.title,
+      source:
+        newBugData.source ||
+        "Manual Report",
       sourceIcon: "FileText",
-      reportedDate: new Date().toISOString().slice(0, 10),
-      severity: newBugData.severity || "Medium",
-      priority: newBugData.priority || "Medium",
+      reportedDate:
+        new Date().toISOString().slice(0, 10),
+      severity:
+        newBugData.severity || "Medium",
+      priority:
+        newBugData.priority || "Medium",
       status: "AI Processing",
-      team: newBugData.team || "Payments",
-      developer: newBugData.developer || "Arun Kumar",
+      team:
+        newBugData.team || "Payments",
+      developer:
+        newBugData.developer || "Arun Kumar",
       reproductionStatus: "Pending",
       reproStatus: "Pending",
       aiStatus: "Processing",
       aiConfidence: 91,
-      aiReason: "Automated preliminary analysis mapped issue to relevant service component.",
-      originalReport: newBugData.originalReport || newBugData.title,
-      aiSummary: newBugData.aiSummary || `Standardized summary: ${newBugData.title}`,
-      expectedBehavior: newBugData.expectedBehavior || "Feature functions as intended without errors.",
-      actualBehavior: newBugData.actualBehavior || "System returned an unexpected failure state.",
+      aiReason:
+        "Automated preliminary analysis mapped issue to relevant service component.",
+      originalReport:
+        newBugData.originalReport ||
+        newBugData.title,
+      aiSummary:
+        newBugData.aiSummary ||
+        `Standardized summary: ${newBugData.title}`,
+      expectedBehavior:
+        newBugData.expectedBehavior ||
+        "Feature functions as intended without errors.",
+      actualBehavior:
+        newBugData.actualBehavior ||
+        "System returned an unexpected failure state.",
       environment: {
         os: "Windows 11 Pro",
         browser: "Chrome 126",
@@ -419,9 +614,22 @@ export function BugProvider({ children }) {
         environment: "Production",
       },
       reproductionSteps: [
-        { step: 1, label: "Open Application", status: "pass" },
-        { step: 2, label: "Execute reported action", status: "fail" },
-        { step: 3, label: "Capture application telemetry error log", status: "pass" },
+        {
+          step: 1,
+          label: "Open Application",
+          status: "pass",
+        },
+        {
+          step: 2,
+          label: "Execute reported action",
+          status: "fail",
+        },
+        {
+          step: 3,
+          label:
+            "Capture application telemetry error log",
+          status: "pass",
+        },
       ],
       duplicates: [],
       activities: [
@@ -429,7 +637,10 @@ export function BugProvider({ children }) {
           user: currentUser.name,
           role: currentUser.roleLabel,
           time: "Just now",
-          text: `Bug report ingested via ${newBugData.source || "Manual Report"}`,
+          text: `Bug report ingested via ${
+            newBugData.source ||
+            "Manual Report"
+          }`,
         },
       ],
       notes: [
@@ -437,12 +648,18 @@ export function BugProvider({ children }) {
           author: currentUser.name,
           role: currentUser.roleLabel,
           time: "Just now",
-          text: `Bug report ingested via ${newBugData.source || "Manual Report"}`,
+          text: `Bug report ingested via ${
+            newBugData.source ||
+            "Manual Report"
+          }`,
         },
       ],
     };
 
-    setBugs((prev) => [fullBug, ...prev]);
+    setBugs((prev) => [
+      fullBug,
+      ...prev,
+    ]);
 
     setAiActivity((prev) => [
       {
@@ -459,7 +676,12 @@ export function BugProvider({ children }) {
     return fullBug;
   };
 
-  const getBugById = (id) => bugs.find((b) => b.id.toLowerCase() === id?.toLowerCase()) || bugs[0];
+  const getBugById = (id) =>
+    bugs.find(
+      (b) =>
+        b.id.toLowerCase() ===
+        id?.toLowerCase()
+    ) || bugs[0];
 
   return (
     <BugContext.Provider
@@ -471,7 +693,10 @@ export function BugProvider({ children }) {
         currentUser,
         authSession,
         authUser,
-        isAuthenticated: Boolean(authUser && authSession?.access_token),
+        isAuthenticated: Boolean(
+          authUser &&
+          authSession?.access_token
+        ),
         authLoading,
         login,
         register,
@@ -497,8 +722,12 @@ export function BugProvider({ children }) {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useBugs() {
   const context = useContext(BugContext);
+
   if (!context) {
-    throw new Error("useBugs must be used within a BugProvider");
+    throw new Error(
+      "useBugs must be used within a BugProvider"
+    );
   }
+
   return context;
 }
